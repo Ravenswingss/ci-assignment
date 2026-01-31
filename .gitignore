@@ -8,3 +8,12 @@ __pycache__/
 # Pytest cache
 .pytest_cache/
 
+# Java build output
+java/target/
+
+# Python virtualenv
+.venv/
+
+# Pytest results
+test-results/
+
