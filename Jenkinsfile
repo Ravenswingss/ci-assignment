@@ -83,9 +83,13 @@ pipeline {
   }
 
   post {
-    always {
-      junit 'test-results/pytest.xml'
-    }
+  always {
+    junit allowEmptyResults: true, testResults: 'test-results/pytest.xml'
+    junit allowEmptyResults: true, testResults: 'java/target/surefire-reports/*.xml'
   }
 }
+
+    
+ 
+
 
