@@ -2,6 +2,7 @@ pipeline {
   agent any
 
   stages {
+
     stage('Checkout') {
       steps {
         checkout scm
@@ -12,8 +13,10 @@ pipeline {
       steps {
         sh '''
           set -euxo pipefail
+
           python3 --version
 
+          # Create Python virtual environment
           python3 -m venv .venv
           . .venv/bin/activate
 
@@ -26,7 +29,7 @@ pipeline {
       }
     }
 
-    stage('Java Tests (JUnit)') {
+    stage('Java Tests (JUnit / Maven)') {
       steps {
         sh '''
           set -euxo pipefail
@@ -39,11 +42,11 @@ pipeline {
 
   post {
     always {
-      // publish both test suites in Jenkins UI
-      junit allowEmptyResults: true, testResults: 'test-results/pytest.xml'
-      junit allowEmptyResults: true, testResults: 'java/target/surefire-reports/*.xml'
+      // Publish test results in Jenkins UI
+      junit 'test-results/pytest.xml'
+      junit 'java/target/surefire-reports/*.xml'
 
-      // optional: keep the xmls as downloadable artifacts
+      // Archive reports (optional but nice for grading)
       archiveArtifacts artifacts: 'test-results/*.xml, java/target/surefire-reports/*.xml',
                        allowEmptyArchive: true,
                        fingerprint: true
