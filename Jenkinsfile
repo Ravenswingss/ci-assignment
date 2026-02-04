@@ -11,12 +11,11 @@ pipeline {
 
     stage('Python Tests') {
       steps {
-        sh '''
+        sh '''#!/bin/bash
           set -euxo pipefail
 
           python3 --version
 
-          # Create Python virtual environment
           python3 -m venv .venv
           . .venv/bin/activate
 
@@ -31,7 +30,7 @@ pipeline {
 
     stage('Java Build + Test (JUnit / Maven)') {
       steps {
-        sh '''
+        sh '''#!/bin/bash
           set -euxo pipefail
           cd java
           mvn -B clean test
@@ -42,11 +41,79 @@ pipeline {
     stage('SonarQube Static Analysis') {
       steps {
         dir('java') {
-          // Jenkins: Manage Jenkins -> System -> SonarQube servers
-          // Name must match what's configured there, e.g. "SonarQube"
           withSonarQubeEnv('SonarQube') {
-            sh '''
+            sh '''#!/bin/bash
               set -euxo pipefail
               mvn -B verify sonar:sonar \
+                -Dsonar.projectKey=mathutils-java \
+                -Dsonar.projectName=mathutils-java
+            '''
+          }
+        }
+      }
+    }
 
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+
+    stage('Package Artifact (JAR)') {
+      steps {
+        dir('java') {
+          sh '''#!/bin/bash
+            set -euxo pipefail
+            mvn -B -DskipTests package
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      junit 'test-results/pytest.xml'
+      junit 'java/target/surefire-reports/*.xml'
+
+      archiveArtifacts artifacts: '''
+        test-results/*.xml,
+        java/target/surefire-reports/*.xml,
+        java/target/*.jar,
+        java/target/site/jacoco/**
+      ''',
+      allowEmptyArchive: true,
+      fingerprint: true
+    }
+
+    success {
+      // If you have "Email Extension Plugin", this works.
+      emailext(
+        to: 'YOUR_EMAIL@gmail.com',
+        subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """Build succeeded ✅
+
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+URL: ${env.BUILD_URL}
+"""
+      )
+    }
+
+    failure {
+      emailext(
+        to: 'lahc.vrc.ponce@gmail.com',
+        subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """Build failed ❌
+
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+URL: ${env.BUILD_URL}
+"""
+      )
+    }
+  }
+}
 
