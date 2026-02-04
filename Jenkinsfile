@@ -29,7 +29,7 @@ pipeline {
       }
     }
 
-    stage('Java Tests (JUnit / Maven)') {
+    stage('Java Build + Test (JUnit / Maven)') {
       steps {
         sh '''
           set -euxo pipefail
@@ -38,19 +38,15 @@ pipeline {
         '''
       }
     }
-  }
 
-  post {
-    always {
-      // Publish test results in Jenkins UI
-      junit 'test-results/pytest.xml'
-      junit 'java/target/surefire-reports/*.xml'
+    stage('SonarQube Static Analysis') {
+      steps {
+        dir('java') {
+          // Jenkins: Manage Jenkins -> System -> SonarQube servers
+          // Name must match what's configured there, e.g. "SonarQube"
+          withSonarQubeEnv('SonarQube') {
+            sh '''
+              set -euxo pipefail
+              mvn -B verify sonar:sonar \
 
-      // Archive reports (optional but nice for grading)
-      archiveArtifacts artifacts: 'test-results/*.xml, java/target/surefire-reports/*.xml',
-                       allowEmptyArchive: true,
-                       fingerprint: true
-    }
-  }
-}
 
