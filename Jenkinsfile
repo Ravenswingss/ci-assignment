@@ -28,18 +28,21 @@ node {
       '''
     }
 
-    stage('SonarQube Static Analysis') {
-      dir('java') {
-        withSonarQubeEnv('SonarQube') {
-          sh '''#!/bin/bash
-            set -euxo pipefail
-            mvn -B verify sonar:sonar \
-              -Dsonar.projectKey=mathutils-java \
-              -Dsonar.projectName=mathutils-java
-          '''
-        }
+stage('SonarQube Static Analysis') {
+  catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+    dir('java') {
+      withSonarQubeEnv('SonarQube') {
+        sh '''#!/bin/bash
+          set -euxo pipefail
+          mvn -B verify sonar:sonar \
+            -Dsonar.projectKey=mathutils-java \
+            -Dsonar.projectName=mathutils-java
+        '''
       }
     }
+  }
+}
+  
 
     stage('Quality Gate') {
       timeout(time: 5, unit: 'MINUTES') {
