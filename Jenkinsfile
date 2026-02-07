@@ -89,9 +89,11 @@ pipeline {
     }
 
     success {
+	script {
+	 try {
       // If you have "Email Extension Plugin", this works.
       emailext(
-        to: 'YOUR_EMAIL@gmail.com',
+        to: 'lahc.vrc.ponce@gmail.com',
         subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: """Build succeeded ✅
 
@@ -103,6 +105,8 @@ URL: ${env.BUILD_URL}
     }
 
     failure {
+	script {
+	 try {
       emailext(
         to: 'lahc.vrc.ponce@gmail.com',
         subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -113,7 +117,9 @@ Build: #${env.BUILD_NUMBER}
 URL: ${env.BUILD_URL}
 """
       )
-    }
+    } catch (err) {
+	echo "Email failed (not failingbuild): ${err}"
+    }	
   }
 }
 
