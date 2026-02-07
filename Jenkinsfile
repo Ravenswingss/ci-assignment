@@ -1,4 +1,7 @@
 node {
+  // Track whether Sonar succeeded enough to produce a task id
+  def sonarOk = false
+
   try {
     stage('Checkout') {
       checkout scm
@@ -28,8 +31,8 @@ node {
       '''
     }
 
-    // Static code analysis (non-fatal for deadline submission)
     stage('SonarQube Static Analysis') {
+      // Non-fatal for submission; mark UNSTABLE if it fails
       catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
         dir('java') {
           withSonarQubeEnv('SonarQube') {
@@ -41,22 +44,23 @@ node {
             '''
           }
         }
+        // If we got here without an exception, consider Sonar "ok"
+        sonarOk = true
       }
     }
 
-    // Only run Quality Gate if Sonar succeeded
     stage('Quality Gate') {
-      if (currentBuild.currentResult == 'SUCCESS') {
+      if (sonarOk && currentBuild.currentResult == 'SUCCESS') {
         timeout(time: 5, unit: 'MINUTES') {
           waitForQualityGate abortPipeline: true
         }
       } else {
-        echo "Skipping Quality Gate because Sonar did not succeed (result=${currentBuild.currentResult})"
+        echo "Skipping Quality Gate (sonarOk=${sonarOk}, result=${currentBuild.currentResult})"
       }
     }
 
-    // Always attempt to generate the deployable artifact
     stage('Package Artifact (JAR)') {
+      // Always attempt packaging; don't let it fail submission
       catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
         dir('java') {
           sh '''#!/bin/bash
@@ -69,19 +73,23 @@ node {
 
   } finally {
     stage('Publish Reports + Notify') {
-      // Publish test results in Jenkins UI
-      junit 'test-results/pytest.xml'
-      junit 'java/target/surefire-reports/*.xml'
+      // Publish test results (won't fail build if missing)
+      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+        junit 'test-results/pytest.xml'
+        junit 'java/target/surefire-reports/*.xml'
+      }
 
-      // Archive artifacts + reports for grading
-      archiveArtifacts artifacts: '''
-        test-results/*.xml,
-        java/target/surefire-reports/*.xml,
-        java/target/*.jar,
-        java/target/site/jacoco/**
-      ''', allowEmptyArchive: true, fingerprint: true
+      // Archive artifacts + coverage
+      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+        archiveArtifacts artifacts: '''
+          test-results/*.xml,
+          java/target/surefire-reports/*.xml,
+          java/target/*.jar,
+          java/target/site/jacoco/**
+        ''', allowEmptyArchive: true, fingerprint: true
+      }
 
-      // Email (non-fatal)
+      // Email (best-effort; never fail build)
       try {
         emailext(
           to: 'lahc.vrc.ponce@gmail.com',
