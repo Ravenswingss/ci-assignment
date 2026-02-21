@@ -75,8 +75,7 @@ node {
     stage('Publish Reports + Notify') {
       // Publish test results (won't fail build if missing)
       catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-        junit 'test-results/pytest.xml'
-        junit 'java/target/surefire-reports/*.xml'
+        junit allowEmptyResults: true, testResults: 'test-results/pytest.xml, java/target/surefire-reports/*.xml'
       }
 
       // Archive artifacts + coverage
@@ -107,4 +106,3 @@ URL: ${env.BUILD_URL}
     }
   }
 }
-
