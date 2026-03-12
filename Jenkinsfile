@@ -1,108 +1,139 @@
-node {
-  // Track whether Sonar succeeded enough to produce a task id
-  def sonarOk = false
+pipeline {
+    agent any
 
-  try {
-    stage('Checkout') {
-      checkout scm
+    environment {
+        DOCKER_IMAGE = "skulldrag/java-ci-app:latest"
+        SONARQUBE_ENV = "SonarQube"
     }
 
-    stage('Python Tests') {
-      sh '''#!/bin/bash
-        set -euxo pipefail
+    stages {
 
-        python3 --version
-        python3 -m venv .venv
-        . .venv/bin/activate
-
-        python -m pip install -U pip
-        python -m pip install pytest
-
-        mkdir -p test-results
-        pytest python/ -q --junitxml=test-results/pytest.xml
-      '''
-    }
-
-    stage('Java Build + Test (JUnit / Maven)') {
-      sh '''#!/bin/bash
-        set -euxo pipefail
-        cd java
-        mvn -B clean test
-      '''
-    }
-
-    stage('SonarQube Static Analysis') {
-      // Non-fatal for submission; mark UNSTABLE if it fails
-      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-        dir('java') {
-          withSonarQubeEnv('SonarQube') {
-            sh '''#!/bin/bash
-              set -euxo pipefail
-              mvn -B verify sonar:sonar \
-                -Dsonar.projectKey=mathutils-java \
-                -Dsonar.projectName=mathutils-java
-            '''
-          }
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-        // If we got here without an exception, consider Sonar "ok"
-        sonarOk = true
-      }
-    }
 
-    stage('Quality Gate') {
-      if (sonarOk && currentBuild.currentResult == 'SUCCESS') {
-        timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
+        stage('Python Tests') {
+            steps {
+                dir('python') {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install -U pip
+                        pip install -r requirements.txt pytest
+                        pytest . --junitxml=pytest-results.xml
+                    '''
+                }
+            }
         }
-      } else {
-        echo "Skipping Quality Gate (sonarOk=${sonarOk}, result=${currentBuild.currentResult})"
-      }
-    }
 
-    stage('Package Artifact (JAR)') {
-      // Always attempt packaging; don't let it fail submission
-      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-        dir('java') {
-          sh '''#!/bin/bash
-            set -euxo pipefail
-            mvn -B -DskipTests package
-          '''
+        stage('Java Version Tests') {
+            parallel {
+
+                stage('Java 8') {
+                    steps {
+                        sh '''
+                        docker run --rm \
+                          -v "$WORKSPACE":/workspace \
+                          -w /workspace/java \
+                          maven:3.9.6-eclipse-temurin-8 \
+                          mvn clean test
+                        '''
+                    }
+                }
+
+                stage('Java 11') {
+                    steps {
+                        sh '''
+                        docker run --rm \
+                          -v "$WORKSPACE":/workspace \
+                          -w /workspace/java \
+                          maven:3.9.6-eclipse-temurin-11 \
+                          mvn clean test
+                        '''
+                    }
+                }
+
+                stage('Java 17') {
+                    steps {
+                        sh '''
+                        docker run --rm \
+                          -v "$WORKSPACE":/workspace \
+                          -w /workspace/java \
+                          maven:3.9.6-eclipse-temurin-17 \
+                          mvn clean test
+                        '''
+                    }
+                }
+
+            }
         }
-      }
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir('java') {
+                    withSonarQubeEnv("${SONARQUBE_ENV}") {
+                        sh '''
+                        mvn clean verify sonar:sonar \
+                          -Dsonar.projectKey=java-ci-app \
+                          -Dsonar.projectName=java-ci-app
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                docker build -t $DOCKER_IMAGE .
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push $DOCKER_IMAGE
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                kubectl apply -f deployment.yaml
+                kubectl rollout status deployment/java-app-deployment
+                '''
+            }
+        }
     }
 
-  } finally {
-    stage('Publish Reports + Notify') {
-      // Publish test results (won't fail build if missing)
-      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-        junit allowEmptyResults: true, testResults: 'test-results/pytest.xml, java/target/surefire-reports/*.xml'
-      }
+    post {
 
-      // Archive artifacts + coverage
-      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-        archiveArtifacts artifacts: '''
-          test-results/*.xml,
-          java/target/surefire-reports/*.xml,
-          java/target/*.jar,
-          java/target/site/jacoco/**
-        ''', allowEmptyArchive: true, fingerprint: true
-      }
+        always {
+            junit allowEmptyResults: true,
+            testResults: 'python/pytest-results.xml, java/target/surefire-reports/*.xml'
 
-      // Email (best-effort; never fail build)
-      try {
-        emailext(
-          to: 'lahc.vrc.ponce@gmail.com',
-          subject: "${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-          body: """Build result: ${currentBuild.currentResult}
+            archiveArtifacts allowEmptyArchive: true,
+            artifacts: 'python/pytest-results.xml, java/target/*.jar'
+        }
 
-Job: ${env.JOB_NAME}
-Build: #${env.BUILD_NUMBER}
-URL: ${env.BUILD_URL}
-"""
-        )
-      } catch (err) {
-        echo "Email failed (not failing build): ${err}"
-      }
+        success {
+            echo 'Pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed.'
+        }
     }
-  }
 }
