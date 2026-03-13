@@ -34,11 +34,7 @@ pipeline {
                 stage('Java 8') {
                     steps {
                         sh '''
-                        docker run --rm \
-                          -v "$WORKSPACE":/workspace \
-                          -w /workspace/java \
-                          maven:3.9.6-eclipse-temurin-8 \
-                          mvn clean test
+                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-8 mvn clean test
                         '''
                     }
                 }
@@ -46,11 +42,7 @@ pipeline {
                 stage('Java 11') {
                     steps {
                         sh '''
-                        docker run --rm \
-                          -v "$WORKSPACE":/workspace \
-                          -w /workspace/java \
-                          maven:3.9.6-eclipse-temurin-11 \
-                          mvn clean test
+                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-11 mvn clean test
                         '''
                     }
                 }
@@ -58,11 +50,7 @@ pipeline {
                 stage('Java 17') {
                     steps {
                         sh '''
-                        docker run --rm \
-                          -v "$WORKSPACE":/workspace \
-                          -w /workspace/java \
-                          maven:3.9.6-eclipse-temurin-17 \
-                          mvn clean test
+                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-17 mvn clean test
                         '''
                     }
                 }
@@ -75,9 +63,9 @@ pipeline {
                 dir('java') {
                     withSonarQubeEnv("${SONARQUBE_ENV}") {
                         sh '''
-                        mvn clean verify sonar:sonar \
-                          -Dsonar.projectKey=java-ci-app \
-                          -Dsonar.projectName=java-ci-app
+                            mvn clean verify sonar:sonar \
+                              -Dsonar.projectKey=java-ci-app \
+                              -Dsonar.projectName=java-ci-app
                         '''
                     }
                 }
@@ -87,7 +75,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                docker build -t $DOCKER_IMAGE .
+                    docker build -t $DOCKER_IMAGE .
                 '''
             }
         }
@@ -99,10 +87,9 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-
                     sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    docker push $DOCKER_IMAGE
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_IMAGE
                     '''
                 }
             }
@@ -111,21 +98,17 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                kubectl apply -f deployment.yaml
-                kubectl rollout status deployment/java-app-deployment
+                    kubectl apply -f deployment.yaml
+                    kubectl rollout status deployment/java-app-deployment
                 '''
             }
         }
     }
 
     post {
-
         always {
-            junit allowEmptyResults: true,
-            testResults: 'python/pytest-results.xml, java/target/surefire-reports/*.xml'
-
-            archiveArtifacts allowEmptyArchive: true,
-            artifacts: 'python/pytest-results.xml, java/target/*.jar'
+            junit allowEmptyResults: true, testResults: 'python/pytest-results.xml, java/target/surefire-reports/*.xml'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'python/pytest-results.xml, java/target/*.jar'
         }
 
         success {
