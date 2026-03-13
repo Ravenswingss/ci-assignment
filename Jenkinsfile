@@ -28,34 +28,49 @@ pipeline {
         }
 
         stage('Java Version Tests') {
-            parallel {
+    parallel {
 
-                stage('Java 8') {
-                    steps {
-                        sh '''
-                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-8 mvn clean test
-                        '''
-                    }
-                }
-
-                stage('Java 11') {
-                    steps {
-                        sh '''
-                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-11 mvn clean test
-                        '''
-                    }
-                }
-
-                stage('Java 17') {
-                    steps {
-                        sh '''
-                            docker run --rm -v "$WORKSPACE":/workspace -w /workspace/java maven:3.9.6-eclipse-temurin-17 mvn clean test
-                        '''
-                    }
-                }
-
+        stage('Java 8') {
+            steps {
+                sh '''
+                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-8 sh -c "
+                        mkdir -p /workspace &&
+                        tar -xf - -C /workspace &&
+                        cd /workspace/java &&
+                        mvn clean test
+                    "
+                '''
             }
         }
+
+        stage('Java 11') {
+            steps {
+                sh '''
+                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-11 sh -c "
+                        mkdir -p /workspace &&
+                        tar -xf - -C /workspace &&
+                        cd /workspace/java &&
+                        mvn clean test
+                    "
+                '''
+            }
+        }
+
+        stage('Java 17') {
+            steps {
+                sh '''
+                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-17 sh -c "
+                        mkdir -p /workspace &&
+                        tar -xf - -C /workspace &&
+                        cd /workspace/java &&
+                        mvn clean test
+                    "
+                '''
+            }
+        }
+
+    }
+}
 
         stage('SonarQube Analysis') {
             steps {
