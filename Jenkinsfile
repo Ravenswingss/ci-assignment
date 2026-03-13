@@ -19,10 +19,9 @@ pipeline {
                 dir('python') {
                     sh '''
                         python3 -m venv .venv
-                        . .venv/bin/activate
-                        pip install -U pip
-                        pip install -r requirements.txt pytest
-                        pytest . --junitxml=pytest-results.xml
+                        .venv/bin/python -m pip install --upgrade pip
+                        .venv/bin/python -m pip install -r requirements.txt pytest
+                        .venv/bin/python -m pytest . --junitxml=pytest-results.xml
                     '''
                 }
             }
