@@ -94,13 +94,12 @@ stage('Push Docker Image') {
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh '''
-                    kubectl apply -f deployment.yaml
-                    kubectl rollout status deployment/java-app-deployment
-                '''
-            }
-        }
+        sh '''
+            kubectl apply --validate=false -f deployment.yaml
+            kubectl rollout status deployment/java-app-deployment
+        '''
     }
+}
 
     post {
         always {
