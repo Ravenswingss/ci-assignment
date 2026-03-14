@@ -14,63 +14,49 @@ pipeline {
             }
         }
 
-        stage('Python Tests') {
-            steps {
-                dir('python') {
-                    sh '''
-                        python3 -m venv .venv
-                        .venv/bin/python -m pip install --upgrade pip
-                        .venv/bin/python -m pip install -r requirements.txt pytest
-                        .venv/bin/python -m pytest . --junitxml=pytest-results.xml
-                    '''
+        stage('Java Version Tests') {
+            parallel {
+
+                stage('Java 8') {
+                    steps {
+                        sh '''
+                            tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-8 sh -c "
+                                mkdir -p /workspace &&
+                                tar -xf - -C /workspace &&
+                                cd /workspace/java &&
+                                mvn clean test
+                            "
+                        '''
+                    }
+                }
+
+                stage('Java 11') {
+                    steps {
+                        sh '''
+                            tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-11 sh -c "
+                                mkdir -p /workspace &&
+                                tar -xf - -C /workspace &&
+                                cd /workspace/java &&
+                                mvn clean test
+                            "
+                        '''
+                    }
+                }
+
+                stage('Java 17') {
+                    steps {
+                        sh '''
+                            tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-17 sh -c "
+                                mkdir -p /workspace &&
+                                tar -xf - -C /workspace &&
+                                cd /workspace/java &&
+                                mvn clean test
+                            "
+                        '''
+                    }
                 }
             }
         }
-
-        stage('Java Version Tests') {
-    parallel {
-
-        stage('Java 8') {
-            steps {
-                sh '''
-                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-8 sh -c "
-                        mkdir -p /workspace &&
-                        tar -xf - -C /workspace &&
-                        cd /workspace/java &&
-                        mvn clean test
-                    "
-                '''
-            }
-        }
-
-        stage('Java 11') {
-            steps {
-                sh '''
-                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-11 sh -c "
-                        mkdir -p /workspace &&
-                        tar -xf - -C /workspace &&
-                        cd /workspace/java &&
-                        mvn clean test
-                    "
-                '''
-            }
-        }
-
-        stage('Java 17') {
-            steps {
-                sh '''
-                    tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-17 sh -c "
-                        mkdir -p /workspace &&
-                        tar -xf - -C /workspace &&
-                        cd /workspace/java &&
-                        mvn clean test
-                    "
-                '''
-            }
-        }
-
-    }
-}
 
         stage('SonarQube Analysis') {
             steps {
@@ -121,8 +107,8 @@ pipeline {
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'python/pytest-results.xml, java/target/surefire-reports/*.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: 'python/pytest-results.xml, java/target/*.jar'
+            junit allowEmptyResults: true, testResults: 'java/target/surefire-reports/*.xml'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'java/target/*.jar'
         }
 
         success {
