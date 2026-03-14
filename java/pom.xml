@@ -69,6 +69,3 @@
     </plugins>
   </build>
 </project>
-git add Jenkinsfile
-git commit -m "Fix Java container workspace transfer using tar pipe"
-git push
