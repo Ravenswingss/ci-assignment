@@ -95,12 +95,12 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                   export KUBECONFIG=/var/jenkins_home/.kube/config
-                   kubectl apply --validate=false -f deployment.yaml
-                   kubectl rollout status deployment/java-app-deployment
-        '''
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true apply --validate=false -f deployment.yaml
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout status deployment/java-app-deployment
+                '''
+            }
+        }
     }
-}
 
     post {
         always {
