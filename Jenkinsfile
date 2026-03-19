@@ -96,7 +96,8 @@ pipeline {
             steps {
                 sh '''
                     kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true apply --validate=false -f deployment.yaml
-                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout status deployment/java-app-deployment
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout restart deployment/java-app-deployment
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout status deployment/java-app-deployment --timeout=180s
                 '''
             }
         }
