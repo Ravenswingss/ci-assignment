@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "skulldrag/java-ci-app:latest"
+        DOCKER_IMAGE = "skulldrag/spring-java-app:latest"
         SONARQUBE_ENV = "SonarQube"
     }
 
@@ -23,7 +23,7 @@ pipeline {
                             tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-8 sh -c "
                                 mkdir -p /workspace &&
                                 tar -xf - -C /workspace &&
-                                cd /workspace/java &&
+                                cd /workspace/spring-java-app &&
                                 mvn clean test
                             "
                         '''
@@ -36,7 +36,7 @@ pipeline {
                             tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-11 sh -c "
                                 mkdir -p /workspace &&
                                 tar -xf - -C /workspace &&
-                                cd /workspace/java &&
+                                cd /workspace/spring-java-app &&
                                 mvn clean test
                             "
                         '''
@@ -49,7 +49,7 @@ pipeline {
                             tar -C "$WORKSPACE" -cf - . | docker run --rm -i maven:3.9.6-eclipse-temurin-17 sh -c "
                                 mkdir -p /workspace &&
                                 tar -xf - -C /workspace &&
-                                cd /workspace/java &&
+                                cd /workspace/spring-java-app &&
                                 mvn clean test
                             "
                         '''
@@ -60,12 +60,12 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                dir('java') {
+                dir('spring-java-app') {
                     withSonarQubeEnv("${SONARQUBE_ENV}") {
                         sh '''
                             mvn clean verify sonar:sonar \
-                              -Dsonar.projectKey=java-ci-app \
-                              -Dsonar.projectName=java-ci-app
+                              -Dsonar.projectKey=spring-java-app \
+                              -Dsonar.projectName=spring-java-app
                         '''
                     }
                 }
@@ -74,7 +74,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t "$DOCKER_IMAGE" .'
+                dir('spring-java-app') {
+                    sh 'docker build -t "$DOCKER_IMAGE" .'
+                }
             }
         }
 
@@ -95,9 +97,9 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true apply --validate=false -f deployment.yaml
-                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout restart deployment/java-app-deployment
-                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout status deployment/java-app-deployment --timeout=180s
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true apply --validate=false -f spring-java-app/deployment.yaml
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout restart deployment/spring-java-app-deployment
+                    kubectl --kubeconfig=/var/jenkins_home/.kube/config --insecure-skip-tls-verify=true rollout status deployment/spring-java-app-deployment --timeout=180s
                 '''
             }
         }
@@ -105,8 +107,8 @@ pipeline {
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'java/target/surefire-reports/*.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: 'java/target/*.jar'
+            junit allowEmptyResults: true, testResults: 'spring-java-app/target/surefire-reports/*.xml'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'spring-java-app/target/*.jar'
         }
 
         success {
